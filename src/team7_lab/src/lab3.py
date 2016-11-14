@@ -1,0 +1,197 @@
+#!/usr/bin/env python
+
+import rospy
+from nav_msgs.msg import GridCells
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist, Point, Pose, PoseStamped, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry, OccupancyGrid
+from kobuki_msgs.msg import BumperEvent
+import tf
+import numpy
+import math 
+import rospy, tf, numpy, math
+
+
+
+
+
+# reads in global map
+def mapCallBack(data):
+	global mapData
+	global width
+	global height
+	global mapgrid
+	global resolution
+	global offsetX
+	global offsetY
+	mapgrid = data
+	resolution = data.info.resolution
+	mapData = data.data
+	width = data.info.width
+	height = data.info.height
+	offsetX = data.info.origin.position.x
+	offsetY = data.info.origin.position.y
+	print data.info
+
+def readGoal(goal):
+	global goalX
+	global goalY
+	#global mapData
+	goalX= goal.pose.position.x
+	goalY= goal.pose.position.y
+	print goal.pose
+	# Start Astar
+	aStar(mapData,[startPosX,startPosY],[goalX,goalY])
+
+def readStart(startPos):
+
+	global startPosX
+	global startPosY
+	startPosX = startPos.pose.pose.position.x
+	startPosY = startPos.pose.pose.position.y
+	print startPos.pose.pose
+#--------------------------------------------------------------------------------------
+def findDist(point, goal):  #Finds the distance between a point and the goal point
+	return (math.sqrt((((int(point[1]))-(int(goal[1])))^2)+(((int(point[2]))-(int(goal[2])))^2)))
+
+def findNeighbor(point, goal):   #Finds the closest neighbor to goal
+	closest = array(0,0)
+	if (abs((point[1]-goal[1]))>(abs((point[2]-goal[2])))):
+		if (point[1] > goal[1]):
+			val = array((point[1]-1),point[2])
+		else:
+			closest = array((point[1]+1),point[2])
+	else:
+		if (point[2] > goal[2]):
+			closest = array((point[1]),(point[2]-1))
+		else:
+			closest = array((point[1]),(point[2]+1))
+            
+
+def aStar(gridData, start, goal):
+	notEvaluated = gridData.cells   #Cells that are not yet evaluated
+	Evaluated = [start]                  #Cells that are evaluated (none so far)
+
+	gScore[start] = 0
+
+	fScore[start] = findDist(start, goal)
+
+	current = start
+    
+	while (pathFound == FALSE):
+		findNeighbor(current, goal)
+	# create a new instance of the map
+
+	# generate a path to the start and end goals by searching through the neighbors, refer to aStar_explanied.py
+
+	# for each node in the path, process the nodes to generate GridCells and Path messages
+
+	# Publish points
+
+#publishes map to rviz using gridcells type
+#-------------------------------------------------------------------------------------
+def publishCells(grid):
+	global pub
+	print "publishing"
+
+	# resolution and offset of the map
+	k=0
+	cells = GridCells()
+	cells.header.frame_id = 'map'
+	cells.cell_width = resolution 
+	cells.cell_height = resolution
+
+	for i in range(1,height): #height should be set to hieght of grid
+		k=k+1
+		for j in range(1,width): #width should be set to width of grid
+			k=k+1
+			#print k # used for debugging
+			if (grid[k] == 100):
+				point=Point()
+				point.x=(j*resolution)+offsetX + (1.5 * resolution) # added secondary offset 
+				point.y=(i*resolution)+offsetY - (.5 * resolution) # added secondary offset ... Magic ?
+				point.z=0
+				cells.cells.append(point)
+	pub.publish(cells)  
+            
+def publishKnownCells(grid):
+	global pubpath
+	print "publishing"
+
+	# resolution and offset of the map
+	k=0
+	cells = GridCells()
+	cells.header.frame_id = 'map'
+	cells.cell_width = resolution 
+	cells.cell_height = resolution
+
+	for i in range(1,height): #height should be set to hieght of grid
+		k=k+1
+		for j in range(1,width): #width should be set to width of grid
+			k=k+1
+			print grid[k] # used for debugging
+			if (grid[k] == 0 and j % 2 == 0):
+				point=Point()
+				point.x=(j*resolution)+offsetX + (1.5 * resolution) # added secondary offset 
+				point.y=(i*resolution)+offsetY - (.5 * resolution) # added secondary offset ... Magic ?
+				point.z=0
+				cells.cells.append(point)
+	pubpath.publish(cells)  
+            
+def publishUnknownCells(grid):
+	global pubway
+	print "publishing"
+
+	# resolution and offset of the map
+	k=0
+	cells = GridCells()
+	cells.header.frame_id = 'map'
+	cells.cell_width = resolution 
+	cells.cell_height = resolution
+
+	for i in range(1,height): #height should be set to height of grid
+		k=k+1
+		for j in range(1,width): #width should be set to width of grid
+			k=k+1
+			#print k # used for debugging
+			if (grid[k] == 0 and j % 2 == 1):
+				point=Point()
+				point.x=(j*resolution)+offsetX + (1.5 * resolution) # added secondary offset 
+				point.y=(i*resolution)+offsetY - (.5 * resolution) # added secondary offset ... Magic ?
+				point.z=0
+				cells.cells.append(point)
+	pubway.publish(cells)  
+            
+
+#Main handler of the project
+def run():
+	global pub
+	global pubpath
+	global pubway
+	rospy.init_node('lab3')
+	sub = rospy.Subscriber("/map", OccupancyGrid, mapCallBack)
+	pub = rospy.Publisher("/map_check", GridCells, queue_size=1)  
+	pubpath = rospy.Publisher("/path", GridCells, queue_size=1) # you can use other types if desired
+	pubway = rospy.Publisher("/waypoints", GridCells, queue_size=1)
+	goal_sub = rospy.Subscriber('move_base_simple/goal', PoseStamped, readGoal, queue_size=1) #change topic for best results
+	goal_sub = rospy.Subscriber('initialpose', PoseWithCovarianceStamped, readStart, queue_size=1) #change topic for best results
+
+	# wait a second for publisher, subscribers, and TF
+	rospy.sleep(1)
+
+
+
+	while (1 and not rospy.is_shutdown()):
+		publishCells(mapData) #publishing map data every 2 seconds
+		publishUnknownCells(mapData)
+		publishKnownCells(mapData)
+		rospy.sleep(2)  
+		print("Complete")
+    
+
+
+if __name__ == '__main__':
+	try:
+		run()
+	except rospy.ROSInterruptException:
+		pass

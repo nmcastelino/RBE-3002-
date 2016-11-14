@@ -1,0 +1,8 @@
+<launch>
+<arg name="map_file" default="$(find aramirez2_lab)/stagemaps/simple_stage.yaml"/>
+<!-- Run the map server -->
+<node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find aramirez2_lab)/stagemaps/.rviz"/>
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find aramirez2_lab)/stagemaps/new_stage.rviz"/>
+<!--include file="$(find package)/launch/filename.launch"-->
+</launch

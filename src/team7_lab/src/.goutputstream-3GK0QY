@@ -1,0 +1,196 @@
+#!/usr/bin/env python
+
+import rospy, tf, numpy, math
+from kobuki_msgs.msg import BumperEvent
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
+from tf.transformations import euler_from_quaternion
+# Add additional imports for each of the message types used
+
+def publishTwist(linVel, angVel):
+    global pub
+    msg = Twist()
+    msg.linear.x = linVel
+    msg.angular.z = angVel
+    pub.publish(msg)
+#drive to a goal subscribed as /move_base_simple/goal
+def navToPose(goal):
+
+    print "spin!"
+
+    print "move!"
+    
+    print "spin!"
+    
+    print "done"
+    pass
+
+
+#This function sequentially calls methods to perform a trajectory.
+def executeTrajectory():
+    driveStraight(60)
+    rotate(90)
+    driveStraight(45)
+    rotate(135)
+
+#This function accepts two wheel velocities and a time interval.
+def spinWheels(u1, u2, time):
+    global pub 
+
+    lin_vel = .5 * ( u1 + u2)
+    ang_vel = (u1 - u2)/ base 
+
+    twist_msg = Twist();
+    stop_msg = Twist();
+
+    twist_msg.linear.x = lin_vel
+    twist_msg.linear.z = ang_vel
+    stop_msg.linear.x = 0
+    stop_msg.linear.z = 0
+
+    now = rospy.Time.now().secs
+    while (rospy.Time.now().secs - now <= time and not rospy.is_shutdown()):
+        pub.publish(twist_msg)
+    pub.publish(stop_msg)
+
+#This function accepts a speed and a distance for the robot to move in a straight line
+def driveStraight(speed, distance):
+    global pose 
+
+    initX = pose.position.x
+    initY = pose.position.y
+    destination = False 
+
+    while(not destination and not rospy.is_shutdown()):
+        currX = pose.position.x 
+        currY = pose.position.y
+        currPos = math.sqrt(currX * currX + currY * currY)
+
+        if (currPos >= distance):
+            destination = True
+            publishTwist(0, 0)
+        else:
+            publishTwist(speed,0)
+            rospy.sleep(0.15)
+
+#Accepts an angle and makes the robot rotate around it.
+def rotate(angle):
+    global odom_list
+    global pose
+
+    if (angle > 180 or angle < -180):
+        print "Let's not complicate this"
+    vel = Twist();
+    done = True
+
+    diff = angle - math.degree(pose.orientation.z)
+
+    while ((abs(error) >= 2) and not rospy.is_shutdown()):
+        publishTwist(0, 0.1)
+        print "theta: %d" % math.degrees(pose.orientation.z)
+
+    publishTwist(0, 0)
+#This function works the same as rotate how ever it does not publish linear velocities.
+def driveArc(radius, speed, angle):
+    global odom_list
+    global pose
+
+    w = speed / radius 
+    if (angle > 180 or angle < -180):
+        print "Let's not complicate this"
+    vel = Twist();
+    done = True
+
+    diff = angle - math.degree(pose.orientation.z)
+
+    while ((abs(error) >= 2) and not rospy.is_shutdown()):
+        publishTwist(speed, w)
+        print "theta: %d" % math.degrees(pose.orientation.z)
+
+    publishTwist(0, 0)
+
+
+#Bumper Event Callback function
+def readBumper(msg):
+    if (msg.state == 1):
+        # What should happen when the bumper is pressed?
+        print "Bumper activated"
+        executeTrajectory()
+
+def getOdomData():
+    sub = rospy.Suscriber("/odom", Odometry, odomCallback)
+
+def odomCallback: 
+    px = data.pose.position.x
+    py = data.pose.position.y
+    quat = data.pose.orientation
+    q = [quat.x, quat.y, quat.z, quat.w]
+    roll, pitch, yaw = euler_from_quaternion(q)
+# (Optional) If you need something to happen repeatedly at a fixed interval, write the code here.
+# Start the timer with the following line of code: 
+#   rospy.Timer(rospy.Duration(.01), timerCallback)
+def timerCallback(event):
+    global pose
+    global theta
+    global Xpos
+    global Ypos
+
+    pose = Pose()
+    odom_list.waitForTransform('map','base_footprint', rospy.Time(0), rospy.Duration(1.0)) 
+    (position, orientation) = odom_list.lookupTransform('map','base_footprint', rospy.Time(0)) #finds the position and oriention of two objects relative to each other (hint: this returns arrays, while Pose uses lists)
+    pose.position.x = position[0]
+    pose.position.y = position[1]
+    Xpos = position[0]
+    Ypos = position[1]
+    odomW = orientation
+    q = [odomW[0], odomW[1], odomW[2], odomW[3]]
+    roll, pitch, yaw = euler_from_quaternion(q)
+
+    pose.orientation.z = yaw
+    theta = math.degrees(yaw)
+
+
+
+# This is the program's main function
+if __name__ == '__main__':
+    # Change this node name to include your username
+    rospy.init_node('sample_Lab_2_node_aramirez2')
+
+
+    # These are global variables. Write "global <variable_name>" in any other function
+    #  to gain access to these global variables
+    
+    global pub
+    global pose
+    global odom_tf
+    global odom_list
+    global theta
+    global Xpos
+    global Ypos
+
+    
+    # Replace the elipses '...' in the following lines to set up the publishers and subscribers the lab requires
+    pub = rospy.Publisher('cmd_vel_mux/input/teleop',Twist, None, queue_size=10) # Publisher for commanding robot motion
+    bumper_sub = rospy.Subscriber('/mobile_base/events/bumper', BumperEvent, readBumper, queue_size=1) # Callback function to handle bumper events
+
+    # Use this object to get the robot's Odometry 
+    odom_list = tf.TransformListener()
+    
+    # Use this command to make the program wait for some seconds
+    rospy.sleep(rospy.Duration(1, 0))
+
+
+
+    print "Starting Lab 2"
+
+    #make the robot keep doing something...
+    rospy.Timer(rospy.Duration(.1), timerCallback)
+    odom_list = tf.TransformListener()
+
+    # Make the robot do stuff...
+    spinWheels(.1, .1, 5)
+
+    print "Lab 2 complete!"
+
